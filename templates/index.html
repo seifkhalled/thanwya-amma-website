@@ -214,7 +214,6 @@ body {
   color: var(--text-secondary);
   font-size: 16px;
 }
-.no-results-icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
 .error-msg {
   text-align: center;
   padding: 24px 20px;
@@ -246,6 +245,12 @@ body {
   color: var(--text-secondary);
   font-size: 13px;
 }
+.footer a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+.footer a:hover { text-decoration: underline; }
 @media (max-width: 600px) {
   .hero h1 { font-size: 24px; }
   .hero { padding: 28px 16px 48px; }
@@ -272,8 +277,8 @@ body {
 
   <div class="search-box">
     <div class="tabs">
-      <button class="tab active" data-by="name" onclick="switchTab('name')">🔍 بحث بالاسم</button>
-      <button class="tab" data-by="id" onclick="switchTab('id')">🔢 بحث برقم الجلوس</button>
+      <button class="tab active" data-by="name" onclick="switchTab('name')">بحث بالاسم</button>
+      <button class="tab" data-by="id" onclick="switchTab('id')">بحث برقم الجلوس</button>
     </div>
     <div class="input-row">
       <input type="text" id="searchInput" placeholder="ادخل اسم الطالب..." autocomplete="off">
@@ -286,7 +291,7 @@ body {
 </div>
 
 <div class="footer">
-  © 2026 — جميع الحقوق محفوظة
+  © 2026 — جميع الحقوق محفوظة &mdash; <a href="https://www.linkedin.com/in/seif-khaled-83bb99252/" target="_blank" rel="noopener">Seif Khaled</a>
 </div>
 
 <script>
@@ -335,7 +340,7 @@ async function search() {
     const data = await res.json();
     if (data.error) { resultsDiv.innerHTML = `<div class="error-msg">${data.error}</div>`; return; }
     if (!data.length) {
-      resultsDiv.innerHTML = `<div class="no-results"><div class="no-results-icon">📭</div>لا توجد نتائج للبحث</div>`;
+      resultsDiv.innerHTML = '<div class="no-results">لا توجد نتائج للبحث</div>';
       return;
     }
     countDiv.textContent = `تم العثور على ${data.length} نتيجة`;
@@ -355,7 +360,7 @@ async function search() {
       </div>`
     ).join('');
   } catch (e) {
-    resultsDiv.innerHTML = '<div class="error-msg">⚠️ حدث خطأ في الاتصال. حاول مرة أخرى.</div>';
+    resultsDiv.innerHTML = '<div class="error-msg">حدث خطأ في الاتصال. حاول مرة أخرى.</div>';
   } finally { btn.disabled = false; }
 }
 </script>

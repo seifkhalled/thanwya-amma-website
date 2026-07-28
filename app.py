@@ -76,9 +76,9 @@ async def home(request: Request):
     html = (Path(__file__).parent / "templates" / "index.html").read_text(encoding="utf-8")
     html = html.replace("<!--STATS-->", f"""
     <div class="stats">
-      <span>👁️ {total:,}</span>
-      <span>👤 {unique:,}</span>
-      <span>🔍 {search_count:,}</span>
+      <span>المشاهدات: <strong>{total:,}</strong></span>
+      <span>الزوار: <strong>{unique:,}</strong></span>
+      <span>عمليات البحث: <strong>{search_count:,}</strong></span>
     </div>
     """)
     return html
