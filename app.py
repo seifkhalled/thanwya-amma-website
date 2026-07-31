@@ -200,13 +200,18 @@ def chart_top_html():
         custom_data=[top["seating_no"]],
     )
     fig.update_traces(
+        text=top["total_degree"].astype(str).str.replace(".0", "", regex=False),
+        textposition="outside",
+        textfont=dict(size=11, color="#4f46e5"),
+        cliponaxis=False,
         hovertemplate="<b>%{y}</b><br>رقم الجلوس: %{customdata[0]}<br>الدرجة: %{x}<extra></extra>"
     )
     fig.update_layout(coloraxis_showscale=False)
     fig.update_yaxes(tickfont=dict(size=11))
+    fig.update_xaxes(range=[top["total_degree"].min() - 0.3, top["total_degree"].max() + 0.3])
     longest = int(top["arabic_name"].str.len().max())
     left = min(70 + longest * 6.5, 430)
-    return fig_html(fig, height=600, margin=dict(l=left, r=45, t=50, b=70), automargin=False)
+    return fig_html(fig, height=600, margin=dict(l=left, r=80, t=50, b=70), automargin=False)
 
 
 def chart_bands_html():
