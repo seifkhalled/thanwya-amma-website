@@ -1,49 +1,43 @@
 # Thanaweya Amma 2026 Results
 
-A FastAPI web app for searching Egyptian high school (Thanaweya Amma) exam results, with an interactive statistics dashboard.
+Search Egyptian high school (Thanaweya Amma) 2026 exam results by name or seating number, with an interactive statistics dashboard.
 
-## Features
+The deployed website is **fully static** (free hosting on GitHub Pages, no backend):
 
-- **Search** by student name (full or partial) or seating number
-- **Dashboard** (`/dashboard`) with Plotly Express charts:
-  - Score distribution histogram with KDE curve
-  - Result breakdown donut (pass / second round / fail / absent)
-  - Box plot of scores by result case
-  - Cumulative score curve with percentile markers
-  - Top 20 highest-scoring students
-  - Score bands (students per 10-degree bucket)
-  - KPI cards (total students, pass rates, average, median, failed count)
+- **Dashboard** (`docs/index.html`): all 6 Plotly charts and KPI cards are pre-rendered and embedded in the page — no server needed.
+- **Search** (`docs/search.html`): the search page downloads a compressed dataset (`docs/data.gz`, ~12 MB) into the browser and searches locally. First load is slower (downloads the dataset once); repeat visits are fast thanks to browser caching.
 
-## Quick Start
+## Repo layout
+
+| Path | Purpose |
+| --- | --- |
+| `docs/` | Generated static website (GitHub Pages serves this folder) |
+| `build_static.py` | Renders `docs/index.html` + `docs/search.html` from the templates |
+| `build_data_files.py` | Builds `docs/data.gz` (compact binary dataset) + `docs/meta.js` |
+| `verify_data.py` | Checks the binary format / search algorithm against the source parquet |
+| `templates/` | Source templates for the live pages |
+| `app.py`, `data.py`, `db.py` | Local FastAPI dev preview (`/` search, `/dashboard`) |
+| `نتيجة ثانوية عامة نظام حديث.parquet` | Source dataset (919,396 rows) |
+
+## Rebuild the static site
 
 ```bash
 pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 7860
+python -X utf8 build_data_files.py   # rebuild docs/data.gz from the parquet
+python -X utf8 build_static.py       # regenerate docs/index.html + docs/search.html
+```
 
-Open http://127.0.0.1:7860 in your browser.
+## Local development
+
+```bash
+uvicorn app:app --host 0.0.0.0 --port 7860
 ```
 
 - Search page: http://127.0.0.1:7860/
 - Dashboard: http://127.0.0.1:7860/dashboard
 
-## Deploy on Hugging Face Spaces
+## Deploy (GitHub Pages)
 
-1. Create a new Space on [huggingface.co/spaces](https://huggingface.co/spaces)
-2. Choose "Docker" or "Blank" SDK
-3. Push this repo
-4. The app will auto-start on port 7860
-
-Or use the CLI:
-
-```bash
-huggingface-cli login
-huggingface-cli repo create your-space-name --type space --sdk docker
-git remote add space https://huggingface.co/spaces/your-username/your-space-name
-git push space main
-```
-
-## Usage
-
-- **Search by name**: enter a student's name (full or partial)
-- **Search by ID**: enter the student's seating number
-- **Dashboard**: open the stats dashboard from the button in the header, or visit `/dashboard`
+1. Push `master` to GitHub.
+2. Repo → Settings → Pages → Source: **Deploy from a branch** → branch `master`, folder `/docs`.
+3. The site is served at `https://<user>.github.io/<repo>/`.
