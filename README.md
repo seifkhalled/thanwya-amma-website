@@ -23,6 +23,9 @@ uvicorn app:app --host 0.0.0.0 --port 7860
 Open http://127.0.0.1:7860 in your browser.
 ```
 
+- Search page: http://127.0.0.1:7860/
+- Dashboard: http://127.0.0.1:7860/dashboard
+
 ## Deploy on Hugging Face Spaces
 
 1. Create a new Space on [huggingface.co/spaces](https://huggingface.co/spaces)
@@ -43,3 +46,4 @@ git push space main
 
 - **Search by name**: enter a student's name (full or partial)
 - **Search by ID**: enter the student's seating number
+- **Dashboard**: open the stats dashboard from the button in the header, or visit `/dashboard`
