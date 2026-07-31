@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 
 PARQUET = Path(__file__).parent / "نتيجة ثانوية عامة نظام حديث.parquet"
 df = pd.read_parquet(PARQUET).fillna("")
+df["student_case_desc"] = df["student_case_desc"].str.strip()
 
 DB = Path(__file__).parent / "stats.db"
 
@@ -28,7 +29,6 @@ TPL = go.layout.Template(
         font=dict(family="Cairo, sans-serif", color="#1e293b"),
         paper_bgcolor="#ffffff",
         plot_bgcolor="#ffffff",
-        margin=dict(l=10, r=10, t=20, b=10),
         hoverlabel=dict(font_family="Cairo", font_size=13, bgcolor="#1e293b"),
         xaxis=dict(gridcolor="#eef2ff", zeroline=False, linecolor="#e2e8f0", tickfont=dict(size=12)),
         yaxis=dict(gridcolor="#eef2ff", zeroline=False, linecolor="#e2e8f0", tickfont=dict(size=12)),
@@ -38,15 +38,29 @@ TPL = go.layout.Template(
 )
 
 
-def style_fig(fig, height=420):
-    fig.update_layout(template=TPL, height=height, showlegend=False)
+DEFAULT_MARGIN = dict(l=120, r=40, t=50, b=115)
+
+
+def style_fig(fig, height=420, margin=None, showlegend=False, automargin=False):
+    fig.update_layout(
+        template=TPL, height=height, showlegend=showlegend,
+        margin=margin if margin is not None else DEFAULT_MARGIN,
+    )
+    if automargin:
+        fig.update_xaxes(automargin=True)
+        fig.update_yaxes(automargin=True)
+    else:
+        fig.update_xaxes(automargin=False)
+        fig.update_yaxes(automargin=False)
+    fig.update_xaxes(title_standoff=20)
+    fig.update_yaxes(title_standoff=20)
     fig.update_xaxes(title_font=dict(size=13, color="#64748b"))
     fig.update_yaxes(title_font=dict(size=13, color="#64748b"))
     return fig
 
 
-def fig_html(fig, height=420):
-    style_fig(fig, height)
+def fig_html(fig, height=420, margin=None, showlegend=False, automargin=False):
+    style_fig(fig, height, margin, showlegend, automargin)
     return fig.to_html(
         full_html=False,
         include_plotlyjs=False,
@@ -126,7 +140,9 @@ def chart_hist_html():
     fig.add_vline(x=d["median"], line_dash="dash", line_color="#ef4444",
                   annotation_text=f"الوسيط {d['median']:.1f}", annotation_font_color="#ef4444",
                   annotation_position="top left")
-    return fig_html(fig)
+    fig.update_xaxes(title_standoff=12)
+    fig.update_yaxes(title_standoff=14)
+    return fig_html(fig, height=500, margin=dict(l=125, r=40, t=50, b=140))
 
 
 def chart_pie_html():
@@ -138,16 +154,12 @@ def chart_pie_html():
         color=labels, color_discrete_map=CASE_COLORS,
     )
     fig.update_traces(
-        textinfo="percent+label",
+        textinfo="percent",
+        textposition="inside",
         textfont=dict(size=13),
         hovertemplate="%{label}<br>%{value:,} طالب (%{percent})<extra></extra>",
     )
-    fig.update_layout(showlegend=False, height=420, template=TPL)
-    return fig.to_html(
-        full_html=False,
-        include_plotlyjs=False,
-        config={"displayModeBar": False, "responsive": True},
-    )
+    return fig_html(fig, height=460, showlegend=True)
 
 
 def chart_box_html():
@@ -157,14 +169,7 @@ def chart_box_html():
         color="student_case_desc", color_discrete_map=CASE_COLORS,
         labels={"student_case_desc": "", "total_degree": "الدرجة"},
     )
-    fig.update_layout(showlegend=False, template=TPL, height=420)
-    fig.update_yaxes(title_font=dict(size=13, color="#64748b"))
-    fig.update_xaxes(title_font=dict(size=13, color="#64748b"))
-    return fig.to_html(
-        full_html=False,
-        include_plotlyjs=False,
-        config={"displayModeBar": False, "responsive": True},
-    )
+    return fig_html(fig, height=460)
 
 
 def chart_cumulative_html():
@@ -180,7 +185,9 @@ def chart_cumulative_html():
         fig.add_hline(y=y, line_dash="dot", line_color="#94a3b8",
                       annotation_text=label, annotation_position="top left",
                       annotation_font_size=12)
-    return fig_html(fig)
+    fig.update_xaxes(title_standoff=12)
+    fig.update_yaxes(title_standoff=14)
+    return fig_html(fig, height=480, margin=dict(l=125, r=40, t=50, b=115))
 
 
 def chart_top_html():
@@ -190,19 +197,16 @@ def chart_top_html():
         color="total_degree",
         color_continuous_scale=["#dbeafe", "#6366f1", "#4f46e5"],
         labels={"total_degree": "الدرجة", "arabic_name": ""},
-        hover_data={"seating_no": True, "arabic_name": False},
+        custom_data=[top["seating_no"]],
     )
-    fig.update_layout(
-        showlegend=False, template=TPL, height=520,
-        coloraxis_showscale=False,
+    fig.update_traces(
+        hovertemplate="<b>%{y}</b><br>رقم الجلوس: %{customdata[0]}<br>الدرجة: %{x}<extra></extra>"
     )
-    fig.update_xaxes(title_font=dict(size=13, color="#64748b"))
-    fig.update_yaxes(title_font=dict(size=13, color="#64748b"))
-    return fig.to_html(
-        full_html=False,
-        include_plotlyjs=False,
-        config={"displayModeBar": False, "responsive": True},
-    )
+    fig.update_layout(coloraxis_showscale=False)
+    fig.update_yaxes(tickfont=dict(size=11))
+    longest = int(top["arabic_name"].str.len().max())
+    left = min(70 + longest * 6.5, 430)
+    return fig_html(fig, height=600, margin=dict(l=left, r=45, t=50, b=70), automargin=False)
 
 
 def chart_bands_html():
@@ -215,8 +219,10 @@ def chart_bands_html():
         labels={"x": "شريحة الدرجات", "y": "عدد الطلاب"},
     )
     fig.update_traces(marker_color="#6366f1", marker_opacity=0.85)
-    fig.update_xaxes(tickangle=-45, tickfont=dict(size=11))
-    return fig_html(fig)
+    fig.update_xaxes(tickangle=-45, tickfont=dict(size=11),
+                     title=dict(text="شريحة الدرجات", standoff=55))
+    fig.update_yaxes(title=dict(text="عدد الطلاب", standoff=22))
+    return fig_html(fig, height=460, margin=dict(l=145, r=40, t=50, b=175), automargin=False)
 
 
 @lru_cache(maxsize=1)

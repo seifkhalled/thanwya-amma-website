@@ -28,6 +28,8 @@ body {
   background: var(--bg);
   min-height: 100vh;
   color: var(--text);
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 .hero {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
@@ -88,7 +90,7 @@ body {
   color: var(--primary-dark);
 }
 .container {
-  max-width: 1100px;
+  max-width: 1280px;
   margin: -36px auto 0;
   padding: 0 16px;
   position: relative;
@@ -143,6 +145,35 @@ body {
   line-height: 1.2;
 }
 .kpi-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; font-weight: 600; }
+.chart-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.chip {
+  padding: 8px 16px;
+  border-radius: 50px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.chip:hover { border-color: var(--primary); color: var(--primary); }
+.chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(99,102,241,.3);
+}
+.chart-card.hidden { display: none; }
+.focus .chart-grid { grid-template-columns: 1fr; }
 .chart-card {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -172,12 +203,32 @@ body {
   .chart-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
-  .hero h1 { font-size: 24px; }
-  .hero { padding: 28px 16px 48px; }
-  .container { margin-top: -28px; }
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .kpi-value { font-size: 22px; }
-  .stats-bar { gap: 16px; font-size: 13px; }
+  .hero h1 { font-size: 22px; }
+  .hero p { font-size: 14px; margin-top: 6px; }
+  .hero { padding: 24px 14px 46px; }
+  .hero-links { flex-direction: column; align-items: stretch; margin-top: 14px; }
+  .hero-links a { justify-content: center; padding: 12px 16px; }
+  .container { margin-top: -24px; padding: 0 12px; }
+  .stats-bar { gap: 10px; font-size: 12px; padding: 10px 12px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .kpi-card { padding: 12px 8px; }
+  .kpi-value { font-size: 20px; }
+  .kpi-icon { font-size: 20px; }
+  .chart-card { padding: 14px 12px 10px; }
+  .chart-card h2 { font-size: 16px; }
+  .chart-card .chart-sub { font-size: 12px; }
+  .chart-selector {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .chip { flex: 0 0 auto; }
+  .footer { padding: 24px 12px; }
 }
 </style>
 </head>
@@ -197,38 +248,48 @@ body {
 
   <!--KPI-->
 
-  <div class="chart-card">
+  <div class="chart-selector" id="chartSelector" role="tablist" aria-label="اختيار الرسم البياني">
+    <button class="chip active" data-chart="all" role="tab" aria-selected="true">عرض الكل</button>
+    <button class="chip" data-chart="hist" role="tab" aria-selected="false">توزيع الدرجات</button>
+    <button class="chip" data-chart="pie" role="tab" aria-selected="false">نتائج الطلاب</button>
+    <button class="chip" data-chart="box" role="tab" aria-selected="false">حسب النتيجة</button>
+    <button class="chip" data-chart="cum" role="tab" aria-selected="false">المنحنى التراكمي</button>
+    <button class="chip" data-chart="top" role="tab" aria-selected="false">أعلى 20 طالب</button>
+    <button class="chip" data-chart="bands" role="tab" aria-selected="false">شرائح الدرجات</button>
+  </div>
+
+  <div class="chart-card" data-chart="hist">
     <h2>توزيع درجات الطلاب</h2>
     <div class="chart-sub">عدد الطلاب عند كل درجة مع منحنى التوزيع الطبيعي</div>
     <div class="chart-body" dir="ltr"><!--HIST--></div>
   </div>
 
   <div class="chart-grid">
-    <div class="chart-card">
+    <div class="chart-card" data-chart="pie">
       <h2>نتائج الطلاب</h2>
       <div class="chart-sub">نسبة النجاح والفشل ودور ثان</div>
       <div class="chart-body" dir="ltr"><!--PIE--></div>
     </div>
-    <div class="chart-card">
+    <div class="chart-card" data-chart="box">
       <h2>توزيع الدرجات حسب النتيجة</h2>
       <div class="chart-sub">الحد الأدنى والربيعيات والحد الأقصى لكل فئة</div>
       <div class="chart-body" dir="ltr"><!--BOX--></div>
     </div>
   </div>
 
-  <div class="chart-card">
+  <div class="chart-card" data-chart="cum">
     <h2>المنحنى التراكمي للدرجات</h2>
     <div class="chart-sub">النسبة المئوية للطلاب الحاصلين على درجة أقل من كل قيمة</div>
     <div class="chart-body" dir="ltr"><!--CUM--></div>
   </div>
 
   <div class="chart-grid">
-    <div class="chart-card">
+    <div class="chart-card" data-chart="top">
       <h2>أعلى 20 طالب</h2>
       <div class="chart-sub">أفضل الطلاب على مستوى الجمهورية</div>
       <div class="chart-body" dir="ltr"><!--TOP--></div>
     </div>
-    <div class="chart-card">
+    <div class="chart-card" data-chart="bands">
       <h2>عدد الطلاب حسب شريحة الدرجات</h2>
       <div class="chart-sub">توزيع الطلاب على شرائح كل 10 درجات</div>
       <div class="chart-body" dir="ltr"><!--BANDS--></div>
@@ -239,6 +300,86 @@ body {
 <div class="footer">
   © 2026 — جميع الحقوق محفوظة
 </div>
+
+<script>
+function resizePlots() {
+  document.querySelectorAll('.js-plotly-plot').forEach(function(el) {
+    if (window.Plotly) Plotly.Plots.resize(el);
+  });
+}
+
+function fitTopChart() {
+  var card = document.querySelector('.chart-card[data-chart="top"]');
+  var el = card ? card.querySelector('.js-plotly-plot') : null;
+  if (!el || !window.Plotly || !el._fullLayout) return;
+  var plotW = el.getBoundingClientRect().width;
+  var maxW = 0;
+  Array.prototype.forEach.call(el.querySelectorAll('.ytick text'), function(t) {
+    var r = t.getBoundingClientRect();
+    if (r.width > maxW) maxW = r.width;
+  });
+  var desired = Math.min(24 + maxW + 24, plotW * 0.55);
+  var cur = el._fullLayout.margin.l;
+  var font = plotW < 500 ? 9 : 11;
+  var curFont = el._fullLayout.yaxis.tickfont.size;
+  var upd = {};
+  if (Math.abs(cur - desired) > 3) upd['margin.l'] = desired;
+  if (curFont !== font) upd['yaxis.tickfont.size'] = font;
+  if (Object.keys(upd).length) Plotly.relayout(el, upd);
+}
+
+function cullBandsTicks() {
+  var w = window.innerWidth;
+  var step = w < 480 ? 4 : (w < 760 ? 3 : 1);
+  document.querySelectorAll('.chart-body').forEach(function(body) {
+    var labels = Array.prototype.slice.call(body.querySelectorAll('.xtick text'));
+    if (labels.length <= 10) return;
+    labels.forEach(function(t, i) {
+      var keep = (i % step === 0) || (i === labels.length - 1);
+      t.style.opacity = keep ? '1' : '0';
+    });
+  });
+}
+
+function layoutCharts() {
+  resizePlots();
+  fitTopChart();
+  cullBandsTicks();
+}
+
+var selector = document.getElementById('chartSelector');
+if (selector) {
+  selector.addEventListener('click', function(e) {
+    var btn = e.target.closest('.chip');
+    if (!btn) return;
+    document.querySelectorAll('.chip').forEach(function(c) {
+      var active = c === btn;
+      c.classList.toggle('active', active);
+      c.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    var target = btn.getAttribute('data-chart');
+    document.querySelectorAll('.chart-card').forEach(function(card) {
+      card.classList.toggle('hidden', target !== 'all' && card.getAttribute('data-chart') !== target);
+    });
+    document.querySelector('.container').classList.toggle('focus', target !== 'all');
+    layoutCharts();
+  });
+}
+
+var resizeTimer;
+window.addEventListener('resize', function() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(layoutCharts, 150);
+});
+
+window.addEventListener('load', function() {
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(layoutCharts);
+  } else {
+    setTimeout(layoutCharts, 50);
+  }
+});
+</script>
 
 </body>
 </html>
