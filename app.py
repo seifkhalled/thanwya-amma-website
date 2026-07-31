@@ -97,12 +97,18 @@ def dashboard_data():
 def kpi_cards_html():
     d = dashboard_data()
     cards = [
-        ("إجمالي الطلاب", f"{d['n']:,}", "#6366f1", "👥"),
-        ("نسبة النجاح دور أول", f"{d['pass1_rate']:.2f}%", "#22c55e", "✅"),
-        ("نسبة النجاح الكلية", f"{d['pass_all_rate']:.2f}%", "#0ea5e9", "🎯"),
-        ("المتوسط العام", f"{d['avg']:.2f}", "#8b5cf6", "📊"),
-        ("الوسيط", f"{d['median']:.2f}", "#f59e0b", "📈"),
-        ("عدد الراسبين", f"{d['failed']:,}", "#ef4444", "❌"),
+        ("إجمالي الطلاب", f"{d['n']:,}", "#6366f1",
+         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'),
+        ("نسبة النجاح دور أول", f"{d['pass1_rate']:.2f}%", "#22c55e",
+         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'),
+        ("نسبة النجاح الكلية", f"{d['pass_all_rate']:.2f}%", "#0ea5e9",
+         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>'),
+        ("المتوسط العام", f"{d['avg']:.2f}", "#8b5cf6",
+         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>'),
+        ("الوسيط", f"{d['median']:.2f}", "#f59e0b",
+         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>'),
+        ("عدد الراسبين", f"{d['failed']:,}", "#ef4444",
+         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'),
     ]
     items = "".join(
         f"""<div class="kpi-card" style="--accent:{color}">
