@@ -1,13 +1,235 @@
-import gradio as gr
 import pandas as pd
 import sqlite3
 import datetime
+import json
+from functools import lru_cache
 from pathlib import Path
+import numpy as np
+from scipy.stats import gaussian_kde
+import plotly.graph_objects as go
+import plotly.express as px
+from fastapi import FastAPI, Query
+from fastapi.responses import HTMLResponse
 
 PARQUET = Path(__file__).parent / "نتيجة ثانوية عامة نظام حديث.parquet"
 df = pd.read_parquet(PARQUET).fillna("")
 
 DB = Path(__file__).parent / "stats.db"
+
+CASE_COLORS = {
+    "ناجح دور أول": "#22c55e",
+    "دور ثان": "#f59e0b",
+    "راسب دور أول": "#ef4444",
+    "غياب كلى دور أول": "#94a3b8",
+}
+
+TPL = go.layout.Template(
+    layout=dict(
+        font=dict(family="Cairo, sans-serif", color="#1e293b"),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        margin=dict(l=10, r=10, t=20, b=10),
+        hoverlabel=dict(font_family="Cairo", font_size=13, bgcolor="#1e293b"),
+        xaxis=dict(gridcolor="#eef2ff", zeroline=False, linecolor="#e2e8f0", tickfont=dict(size=12)),
+        yaxis=dict(gridcolor="#eef2ff", zeroline=False, linecolor="#e2e8f0", tickfont=dict(size=12)),
+        colorway=["#6366f1", "#8b5cf6", "#22c55e", "#f59e0b", "#ef4444", "#0ea5e9"],
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=12)),
+    )
+)
+
+
+def style_fig(fig, height=420):
+    fig.update_layout(template=TPL, height=height, showlegend=False)
+    fig.update_xaxes(title_font=dict(size=13, color="#64748b"))
+    fig.update_yaxes(title_font=dict(size=13, color="#64748b"))
+    return fig
+
+
+def fig_html(fig, height=420):
+    style_fig(fig, height)
+    return fig.to_html(
+        full_html=False,
+        include_plotlyjs=False,
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+
+@lru_cache(maxsize=1)
+def dashboard_data():
+    scores = df["total_degree"].to_numpy()
+    n = len(scores)
+
+    case_counts = df["student_case_desc"].value_counts()
+    pass1 = int(case_counts.get("ناجح دور أول", 0))
+    second = int(case_counts.get("دور ثان", 0))
+    failed = int(case_counts.get("راسب دور أول", 0))
+    absent = int(case_counts.get("غياب كلى دور أول", 0))
+
+    return dict(
+        scores=scores,
+        n=n,
+        pass1=pass1,
+        second=second,
+        failed=failed,
+        absent=absent,
+        pass1_rate=pass1 / n * 100,
+        pass_all_rate=(pass1 + second) / n * 100,
+        avg=float(np.mean(scores)),
+        median=float(np.median(scores)),
+        max_score=float(scores.max()),
+    )
+
+
+def kpi_cards_html():
+    d = dashboard_data()
+    cards = [
+        ("إجمالي الطلاب", f"{d['n']:,}", "#6366f1", "👥"),
+        ("نسبة النجاح دور أول", f"{d['pass1_rate']:.2f}%", "#22c55e", "✅"),
+        ("نسبة النجاح الكلية", f"{d['pass_all_rate']:.2f}%", "#0ea5e9", "🎯"),
+        ("المتوسط العام", f"{d['avg']:.2f}", "#8b5cf6", "📊"),
+        ("الوسيط", f"{d['median']:.2f}", "#f59e0b", "📈"),
+        ("عدد الراسبين", f"{d['failed']:,}", "#ef4444", "❌"),
+    ]
+    items = "".join(
+        f"""<div class="kpi-card" style="--accent:{color}">
+          <div class="kpi-icon">{icon}</div>
+          <div class="kpi-value">{value}</div>
+          <div class="kpi-label">{label}</div>
+        </div>"""
+        for label, value, color, icon in cards
+    )
+    return f'<div class="kpi-grid">{items}</div>'
+
+
+def chart_hist_html():
+    d = dashboard_data()
+    scores = d["scores"]
+    counts, edges = np.histogram(scores, bins=80, range=(0, 320))
+    centers = (edges[:-1] + edges[1:]) / 2
+    width = edges[1] - edges[0]
+
+    rng = np.random.default_rng(42)
+    sample = scores[np.sort(rng.choice(len(scores), size=60000, replace=False))]
+    kde = gaussian_kde(sample)
+    grid = np.linspace(0, 320, 400)
+
+    fig = px.bar(
+        x=centers, y=counts,
+        labels={"x": "الدرجة", "y": "عدد الطلاب"},
+    )
+    fig.add_trace(go.Scatter(
+        x=grid, y=kde(grid) * len(scores) * width,
+        mode="lines", name="منحنى التوزيع",
+        line=dict(color="#f59e0b", width=3),
+    ))
+    fig.update_traces(marker_color="#6366f1", marker_opacity=0.8)
+    fig.add_vline(x=d["median"], line_dash="dash", line_color="#ef4444",
+                  annotation_text=f"الوسيط {d['median']:.1f}", annotation_font_color="#ef4444",
+                  annotation_position="top left")
+    return fig_html(fig)
+
+
+def chart_pie_html():
+    d = dashboard_data()
+    labels = ["ناجح دور أول", "دور ثان", "راسب دور أول", "غياب كلى دور أول"]
+    values = [d["pass1"], d["second"], d["failed"], d["absent"]]
+    fig = px.pie(
+        values=values, names=labels, hole=0.55,
+        color=labels, color_discrete_map=CASE_COLORS,
+    )
+    fig.update_traces(
+        textinfo="percent+label",
+        textfont=dict(size=13),
+        hovertemplate="%{label}<br>%{value:,} طالب (%{percent})<extra></extra>",
+    )
+    fig.update_layout(showlegend=False, height=420, template=TPL)
+    return fig.to_html(
+        full_html=False,
+        include_plotlyjs=False,
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+
+def chart_box_html():
+    sample = df.sample(n=12000, random_state=42)
+    fig = px.box(
+        sample, x="student_case_desc", y="total_degree", points=False,
+        color="student_case_desc", color_discrete_map=CASE_COLORS,
+        labels={"student_case_desc": "", "total_degree": "الدرجة"},
+    )
+    fig.update_layout(showlegend=False, template=TPL, height=420)
+    fig.update_yaxes(title_font=dict(size=13, color="#64748b"))
+    fig.update_xaxes(title_font=dict(size=13, color="#64748b"))
+    return fig.to_html(
+        full_html=False,
+        include_plotlyjs=False,
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+
+def chart_cumulative_html():
+    d = dashboard_data()
+    grid = np.arange(0, 321)
+    pct = np.searchsorted(np.sort(d["scores"]), grid, side="right") / d["n"] * 100
+    fig = px.line(
+        x=grid, y=pct,
+        labels={"x": "الدرجة", "y": "النسبة التراكمية (%)"},
+    )
+    fig.update_traces(line=dict(color="#8b5cf6", width=3), fill="tozeroy", fillcolor="rgba(139,92,246,.1)")
+    for y, label in ((10, "أعلى 10%"), (50, "الوسيط 50%"), (90, "أدنى 90%")):
+        fig.add_hline(y=y, line_dash="dot", line_color="#94a3b8",
+                      annotation_text=label, annotation_position="top left",
+                      annotation_font_size=12)
+    return fig_html(fig)
+
+
+def chart_top_html():
+    top = df.nlargest(20, "total_degree").iloc[::-1]
+    fig = px.bar(
+        top, x="total_degree", y="arabic_name", orientation="h",
+        color="total_degree",
+        color_continuous_scale=["#dbeafe", "#6366f1", "#4f46e5"],
+        labels={"total_degree": "الدرجة", "arabic_name": ""},
+        hover_data={"seating_no": True, "arabic_name": False},
+    )
+    fig.update_layout(
+        showlegend=False, template=TPL, height=520,
+        coloraxis_showscale=False,
+    )
+    fig.update_xaxes(title_font=dict(size=13, color="#64748b"))
+    fig.update_yaxes(title_font=dict(size=13, color="#64748b"))
+    return fig.to_html(
+        full_html=False,
+        include_plotlyjs=False,
+        config={"displayModeBar": False, "responsive": True},
+    )
+
+
+def chart_bands_html():
+    d = dashboard_data()
+    bins = list(range(0, 321, 10))
+    labels = [f"{i}-{i + 10}" for i in range(0, 310, 10)] + ["310-320"]
+    counts, _ = np.histogram(d["scores"], bins=bins)
+    fig = px.bar(
+        x=labels, y=counts,
+        labels={"x": "شريحة الدرجات", "y": "عدد الطلاب"},
+    )
+    fig.update_traces(marker_color="#6366f1", marker_opacity=0.85)
+    fig.update_xaxes(tickangle=-45, tickfont=dict(size=11))
+    return fig_html(fig)
+
+
+@lru_cache(maxsize=1)
+def charts_html():
+    return {
+        "kpi": kpi_cards_html(),
+        "hist": chart_hist_html(),
+        "pie": chart_pie_html(),
+        "box": chart_box_html(),
+        "cum": chart_cumulative_html(),
+        "top": chart_top_html(),
+        "bands": chart_bands_html(),
+    }
 
 def init_db():
     with sqlite3.connect(str(DB)) as conn:
@@ -25,7 +247,8 @@ init_db()
 
 def visit():
     with sqlite3.connect(str(DB)) as conn:
-        conn.execute("INSERT INTO page_views (dt) VALUES (?)", (datetime.datetime.utcnow().isoformat(),))
+        conn.execute("INSERT INTO page_views (dt) VALUES (?)",
+                     (datetime.datetime.utcnow().isoformat(),))
         conn.commit()
 
 def record_search(query, n):
@@ -40,129 +263,46 @@ def stats_html():
         sc = conn.execute("SELECT COUNT(*) FROM searches").fetchone()[0]
     return f"""<div class="stats-bar"><span>المشاهدات: <strong>{total:,}</strong></span><span>عمليات البحث: <strong>{sc:,}</strong></span></div>"""
 
-def status_class(s):
-    s = (s or "").lower()
-    if "ناجح" in s: return "status-pass"
-    if "دور ثان" in s: return "status-second"
-    return "status-fail"
+app = FastAPI()
 
-def search_fn(q, by):
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    visit()
+    html = Path(__file__).parent.joinpath("templates", "index.html").read_text(encoding="utf-8")
+    html = html.replace("<!--STATS-->", stats_html())
+    return HTMLResponse(html)
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    visit()
+    html = Path(__file__).parent.joinpath("templates", "dashboard.html").read_text(encoding="utf-8")
+    html = html.replace("<!--STATS-->", stats_html())
+    for key, value in charts_html().items():
+        html = html.replace(f"<!--{key.upper()}-->", value)
+    return HTMLResponse(html)
+
+@app.get("/search")
+async def search(q: str = Query(...), by: str = Query("name")):
     visit()
     q = q.strip()
     if not q:
-        return stats_html(), ""
+        return []
 
     if by == "id":
         try:
             sid = int(q)
         except ValueError:
-            return stats_html(), '<div class="error-msg">رقم جلوس غير صالح</div>'
+            return []
         result = df[df["seating_no"] == sid]
     else:
         parts = q.split()
         mask = pd.Series(True, index=df.index)
         for p in parts:
-            mask &= df["arabic_name"].str.replace(" ", "", regex=False).str.contains(p.replace(" ", ""), case=False, na=False)
+            mask &= df["arabic_name"].str.replace(" ", "", regex=False).str.contains(
+                p.replace(" ", ""), case=False, na=False
+            )
         result = df[mask]
 
-    if result.empty:
-        record_search(q, 0)
-        return stats_html(), '<div class="no-results">لا توجد نتائج للبحث</div>'
-
-    data = result.head(50)
+    data = json.loads(result.head(50).to_json(orient="records"))
     record_search(q, len(data))
-    count = f'<div class="results-count">تم العثور على {len(data)} نتيجة</div>'
-    cards = data.apply(lambda s: f"""
-        <div class="result-card">
-            <div class="result-info">
-                <div class="result-name">{s["arabic_name"]}</div>
-                <div class="result-id">رقم الجلوس: <span>{s["seating_no"]}</span></div>
-            </div>
-            <div class="result-meta">
-                <div class="degree"><div class="degree-value">{s["total_degree"]}</div><span class="degree-label">الدرجة</span></div>
-                <div class="status-badge {status_class(s["student_case_desc"])}">{s["student_case_desc"]}</div>
-            </div>
-        </div>""", axis=1).str.cat(sep="")
-    return stats_html(), count + cards
-
-CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
-:root { --primary: #6366f1; --primary-dark: #4f46e5; --bg: #f0f2f5; --card-bg: #fff; --text: #1e293b; --text-secondary: #64748b; --border: #e2e8f0; --radius: 16px; --radius-sm: 10px; --shadow: 0 1px 3px rgba(0,0,0,.06); --shadow-lg: 0 10px 40px rgba(99,102,241,.15); }
-* { font-family: 'Cairo', sans-serif !important; }
-.gradio-container { max-width: 720px !important; margin: 0 auto !important; padding: 0 !important; background: var(--bg) !important; }
-.gradio-container .main { padding: 0 !important; }
-.hero { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%); padding: 40px 20px 60px; text-align: center; position: relative; overflow: hidden; }
-.hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 50%, rgba(255,255,255,.15) 0%, transparent 50%), radial-gradient(circle at 80% 50%, rgba(255,255,255,.1) 0%, transparent 50%); }
-.hero h1 { font-size: 32px; font-weight: 800; color: #fff; position: relative; text-shadow: 0 2px 4px rgba(0,0,0,.1); }
-.hero p { color: rgba(255,255,255,.85); font-size: 16px; margin-top: 8px; position: relative; }
-.stats-bar { display: flex; justify-content: center; gap: 32px; margin: -36px auto 20px; font-size: 14px; color: var(--text-secondary); background: var(--card-bg); border-radius: var(--radius); padding: 14px 24px; box-shadow: var(--shadow); border: 1px solid var(--border); flex-wrap: wrap; max-width: 720px; }
-.stats-bar strong { color: var(--text); font-weight: 700; }
-.search-box { background: var(--card-bg); border-radius: var(--radius); padding: 20px 24px 24px; box-shadow: var(--shadow-lg); margin-bottom: 20px; }
-.gr-box { border: none !important; background: transparent !important; box-shadow: none !important; }
-.gr-form { border: none !important; background: transparent !important; }
-/* radio as tabs */
-#search-mode { display: flex !important; flex-direction: row !important; gap: 4px !important; background: #f1f5f9 !important; border-radius: 10px !important; padding: 4px !important; margin-bottom: 16px !important; }
-#search-mode label { flex: 1; text-align: center; margin: 0 !important; padding: 0 !important; }
-#search-mode label input { display: none; }
-#search-mode label span { display: block; padding: 10px; font-size: 14px; font-weight: 600; border-radius: 8px; cursor: pointer; color: var(--text-secondary); transition: all .2s; }
-#search-mode label input:checked + span { background: var(--card-bg); color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-/* input row */
-.input-row { display: flex; gap: 8px; }
-#search-input { border: 2px solid var(--border) !important; border-radius: var(--radius-sm) !important; padding: 14px 18px !important; font-size: 16px !important; background: #fafafa !important; box-shadow: none !important; }
-#search-input:focus { border-color: var(--primary) !important; box-shadow: 0 0 0 4px rgba(99,102,241,.12) !important; background: #fff !important; }
-#search-btn { background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important; color: #fff !important; border: none !important; border-radius: var(--radius-sm) !important; padding: 14px 32px !important; font-size: 16px !important; font-weight: 700 !important; cursor: pointer !important; min-width: 100px; text-align: center; }
-#search-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,.4) !important; }
-/* results */
-.result-card { background: var(--card-bg); border-radius: var(--radius); padding: 20px 24px; box-shadow: var(--shadow); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border: 1px solid var(--border); }
-.result-name { font-size: 18px; font-weight: 700; }
-.result-id { font-size: 13px; color: var(--text-secondary); }
-.result-id span { color: var(--text); font-weight: 600; }
-.result-meta { display: flex; align-items: center; gap: 16px; }
-.degree { text-align: center; }
-.degree-value { font-size: 28px; font-weight: 800; color: var(--primary); line-height: 1; }
-.degree-label { font-size: 11px; color: var(--text-secondary); display: block; }
-.status-badge { padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 700; white-space: nowrap; }
-.status-pass { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; }
-.status-fail { background: linear-gradient(135deg, #fef2f2, #fecaca); color: #991b1b; }
-.status-second { background: linear-gradient(135deg, #fef9c3, #fde68a); color: #854d0e; }
-.no-results { text-align: center; padding: 48px 20px; color: var(--text-secondary); font-size: 16px; }
-.error-msg { text-align: center; padding: 24px 20px; color: #dc2626; font-size: 15px; background: #fef2f2; border-radius: var(--radius); margin: 8px 0; }
-.results-count { font-size: 14px; color: var(--text-secondary); text-align: center; margin-bottom: 12px; }
-.linkedin-bar { text-align: center; margin: 20px 0; }
-.linkedin-bar a { display: inline-flex; align-items: center; gap: 8px; background: #0a66c2; color: #fff; padding: 10px 24px; border-radius: 50px; text-decoration: none; font-size: 15px; font-weight: 700; transition: all .2s; }
-.linkedin-bar a:hover { background: #004182; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(10,102,194,.35); }
-.footer { text-align: center; padding: 32px 20px; color: var(--text-secondary); font-size: 13px; }
-@media (max-width: 600px) {
-  .hero h1 { font-size: 24px; }
-  .hero { padding: 28px 16px 48px; }
-  .stats-bar { margin-top: -28px; gap: 16px; font-size: 13px; }
-  .result-card { flex-direction: column; align-items: flex-start; }
-  .result-meta { width: 100%; justify-content: space-between; }
-  .degree-value { font-size: 24px; }
-}
-"""
-
-HERO = """<div class="hero"><h1>نتيجة الثانوية العامة 2026</h1><p>البحث عن النتيجة بواسطة الاسم أو رقم الجلوس</p></div>"""
-LINKEDIN = """<div class="linkedin-bar"><a href="https://www.linkedin.com/in/seif-khaled-83bb99252/" target="_blank" rel="noopener"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg> Seif Khaled</a></div>"""
-FOOTER = """<div class="footer">© 2026 — جميع الحقوق محفوظة</div>"""
-
-with gr.Blocks(css=CSS, title="نتيجة الثانوية العامة 2026", theme=gr.themes.Base()) as demo:
-    gr.HTML(HERO)
-    stats_out = gr.HTML(stats_html())
-
-    with gr.Group(elem_classes="search-box"):
-        by = gr.Radio(choices=["بحث بالاسم", "بحث برقم الجلوس"], value="بحث بالاسم", label="", elem_id="search-mode", container=False)
-        with gr.Row():
-            q = gr.Textbox(label="", placeholder="ادخل اسم الطالب...", elem_id="search-input", container=False)
-            btn = gr.Button("بحث", elem_id="search-btn")
-
-    results_out = gr.HTML("")
-    gr.HTML(LINKEDIN)
-    gr.HTML(FOOTER)
-
-    def wrapper(q_val, by_val):
-        by_key = "name" if by_val == "بحث بالاسم" else "id"
-        return search_fn(q_val, by_key)
-
-    btn.click(wrapper, inputs=[q, by], outputs=[stats_out, results_out])
-    q.submit(wrapper, inputs=[q, by], outputs=[stats_out, results_out])
+    return data
